@@ -3,6 +3,7 @@
  * Uses AppleScript, so macOS asks once for permission to control each browser.
  */
 const { execFile } = require('child_process');
+const { systemPreferences } = require('electron');
 
 // App name -> which AppleScript dialect it speaks.
 const BROWSERS = {
@@ -87,24 +88,96 @@ async function getFrontTab() {
   };
 }
 
-/**
- * Where the cat should land: the middle of the tab, with y on the line its feet stand on.
- * Screen coordinates. AppleScript can't report a tab's real position, so this is
- * worked out from the window and the usual tab strip layout. Tune the numbers here.
+/*
+ * Finds the real on-screen rectangle of the front window's tabs through the
+ * Accessibility API. Works on any Mac, screen size, window position or tab layout,
+ * but needs Accessibility permission (System Settings > Privacy & Security).
+ * Prints JSON: { tabs: [{x, y, w, h, selected}] } sorted left to right.
  */
-function tabTarget(tab) {
+const FIND_TABS = `
+function run(argv) {
+  const proc = Application('System Events').processes.byName(argv[0]);
+  // Chrome only builds its accessibility tree when asked, so switch it on for the lookup.
+  const eui = proc.attributes.byName('AXEnhancedUserInterface');
+  let wasOn = true;
+  try { wasOn = eui.value(); if (!wasOn) eui.value = true; } catch (e) {}
+  const tabs = [];
+  function walk(el, depth) {
+    if (depth > 12 || tabs.length) return;
+    let kids;
+    try { kids = el.uiElements(); } catch (e) { return; }
+    for (const k of kids) {
+      let role = '';
+      try { role = k.role(); } catch (e) { continue; }
+      if (role === 'AXWebArea' || role === 'AXScrollArea' || role === 'AXTextField') continue; // page content, never tabs
+      if (role === 'AXTabGroup') {
+        for (const t of k.uiElements()) {
+          let r = '';
+          try { r = t.role(); } catch (e) { continue; }
+          if (r !== 'AXRadioButton' && r !== 'AXTab') continue;
+          const [x, y] = t.position();
+          const [w, h] = t.size();
+          let selected = false;
+          try { selected = Boolean(Number(t.value())); } catch (e) {}
+          if (w > 0 && h > 0) tabs.push({ x, y, w, h, selected });
+        }
+        if (tabs.length) return;
+      }
+      walk(k, depth + 1);
+    }
+  }
+  // Windows come front to back. In full screen the tab strip is a separate small window,
+  // so look through each one and stop at the first that has tabs.
+  for (let attempt = 0; attempt < 2 && !tabs.length; attempt++) {
+    if (attempt) delay(0.4); // the tree may still be building
+    const windows = proc.windows();
+    for (let i = 0; i < windows.length && !tabs.length; i++) walk(windows[i], 0);
+  }
+  if (!wasOn) { try { eui.value = false; } catch (e) {} }
+  tabs.sort((a, b) => a.x - b.x);
+  return JSON.stringify({ tabs });
+}`;
+
+let accessibilityDenied = false;
+
+// The active tab's real rectangle in screen points, or null if macOS won't say.
+async function tabRect(tab) {
+  // Without the permission macOS doesn't fail, it just shows no windows, so check first.
+  accessibilityDenied = !systemPreferences.isTrustedAccessibilityClient(false);
+  if (accessibilityDenied) return null;
+  try {
+    const out = await run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', FIND_TABS, tab.app]);
+    const { tabs } = JSON.parse(out);
+    if (!tabs.length) return null;
+    return tabs.find((t) => t.selected) ?? tabs[tab.index - 1] ?? null;
+  } catch {
+    return null; // window closed mid-lookup, or a layout we don't recognise
+  }
+}
+
+/**
+ * Where the cat should land: x is the middle of the tab, y is the line its feet stand
+ * on, which is the top edge of the tab so it perches on the tab header. Screen points.
+ * Uses the real tab position when Accessibility is allowed, otherwise an estimate
+ * from the window frame and each browser's standard tab strip layout.
+ */
+async function tabTarget(tab) {
+  const rect = await tabRect(tab);
+  if (rect) return { x: rect.x + rect.w / 2, y: rect.y + 3 };
+
   const { x, y, width } = tab.bounds;
   if (tab.kind === 'safari') {
-    // Safari's tab bar sits under the toolbar and spans the window; one tab means no bar.
-    if (tab.count <= 1) return { x: x + width / 2, y: y + 52 };
+    // Separate tab bar under the toolbar; with one tab there is no bar, so stand on the toolbar.
+    if (tab.count <= 1) return { x: x + width / 2, y: y + 6 };
     const tabWidth = width / tab.count;
-    return { x: x + (tab.index - 0.5) * tabWidth, y: y + 80 };
+    return { x: x + (tab.index - 0.5) * tabWidth, y: y + 54 };
   }
-  const LEFT = 88; // window buttons
-  const RIGHT = 56; // new-tab button and tab search
-  const MAX_TAB = 240;
+  // Chromium browsers: tabs start right of the window buttons, at the top of the window.
+  const LEFT = 78;
+  const RIGHT = 90; // new-tab and tab search buttons
+  const MAX_TAB = 256;
   const tabWidth = Math.min(MAX_TAB, (width - LEFT - RIGHT) / tab.count);
-  return { x: x + LEFT + (tab.index - 0.5) * tabWidth, y: y + 40 };
+  return { x: x + LEFT + (tab.index - 0.5) * tabWidth, y: y + 8 };
 }
 
 // Closes the tab, but only if it is still the one in front.
@@ -124,4 +197,4 @@ async function closeTab(tab) {
   }
 }
 
-module.exports = { frontApp, getFrontTab, tabTarget, closeTab };
+module.exports = { frontApp, getFrontTab, tabTarget, closeTab, needsAccessibility: () => accessibilityDenied };

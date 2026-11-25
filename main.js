@@ -3,7 +3,7 @@
  * the cat is drawn in it. Once a second we ask the browser which tab is in front,
  * count time on watched sites, and send the cat when the limit is reached.
  */
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell, systemPreferences } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { SITES, siteFor } = require('./sites');
@@ -23,6 +23,8 @@ let ticking = false;
 let catOut = false; // the warning cat is on screen
 let lastTab = null;
 let needsPermission = null; // browser name macOS won't let us control
+let needsAccessibility = false; // can't read real tab positions, so the cat estimates them
+let peekY = 0;
 
 const statePath = () => path.join(app.getPath('userData'), 'state.json');
 
@@ -86,6 +88,16 @@ function buildMenu() {
     items.push(
       { label: `Pounce can't see ${needsPermission}.`, enabled: false },
       { label: 'Allow it in System Settings → Privacy & Security → Automation', enabled: false },
+      { type: 'separator' }
+    );
+  }
+  if (needsAccessibility) {
+    items.push(
+      { label: 'Let the cat find your tabs exactly:', enabled: false },
+      {
+        label: 'Allow Accessibility for Pounce…',
+        click: () => shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'),
+      },
       { type: 'separator' }
     );
   }
@@ -178,7 +190,8 @@ async function tick() {
       act(tab, "Time's up. Paws off.", { close: true });
     } else if (state.seconds >= warnAt) {
       const left = limit - state.seconds;
-      const local = toOverlay(browser.tabTarget(tab));
+      if (!catOut) peekY = toOverlay(await browser.tabTarget(tab)).y; // look the tab up once, not every second
+      const local = { y: peekY };
       send('peek', { baseY: local.y, text: `psst… ${left >= 60 ? Math.ceil(left / 60) + ' min' : left + 's'} left` });
       catOut = true;
     } else if (catOut) {
@@ -192,12 +205,16 @@ async function tick() {
 }
 
 // Send the cat to the tab. With close: true the tab is closed when it lands.
-function act(tab, text, { close }) {
-  const target = tab ? browser.tabTarget(tab) : null;
-  const display = screen.getPrimaryDisplay().bounds;
-  const local = toOverlay(target ?? { x: display.x + 420, y: display.y + 90 });
+async function act(tab, text, { close }) {
   acting = { tab, close };
   catOut = false;
+  const target = tab ? await browser.tabTarget(tab) : null;
+  if (browser.needsAccessibility() !== needsAccessibility) {
+    needsAccessibility = browser.needsAccessibility();
+    buildMenu();
+  }
+  const display = screen.getPrimaryDisplay().bounds;
+  const local = toOverlay(target ?? { x: display.x + 420, y: display.y + 90 });
   send('pounce', { tabX: local.x, baseY: local.y, text });
   actTimer = setTimeout(endAct, 20000); // never get stuck if the overlay goes quiet
 }
@@ -232,10 +249,15 @@ if (!app.requestSingleInstanceLock()) {
       overlay.webContents.once('did-finish-load', async () => {
         console.log('overlay loaded', JSON.stringify(overlay.getBounds()));
         console.log('front app:', await browser.frontApp());
+        const fake = { app: 'Google Chrome', kind: 'chrome', index: 2, count: 4, bounds: { x: 0, y: 121, width: 1512, height: 861 } };
+        console.log('tab target:', JSON.stringify(await browser.tabTarget(fake)), 'accessibility denied:', browser.needsAccessibility());
         setTimeout(() => app.quit(), 500);
       });
       return;
     }
+    // Ask macOS once for Accessibility, which lets the cat read where the tabs really are.
+    needsAccessibility = !systemPreferences.isTrustedAccessibilityClient(true);
+    buildMenu();
     setInterval(tick, 1000);
   });
   app.on('window-all-closed', () => {}); // keep running in the menu bar

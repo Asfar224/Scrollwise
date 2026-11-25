@@ -37,7 +37,7 @@ Works with Chrome, Brave, Edge, Vivaldi, and Safari.
 | File | Role |
 | --- | --- |
 | `main.js` | App shell: the see-through overlay window, menu bar icon, timer loop |
-| `browser.js` | Asks the browser for the front tab (AppleScript), estimates where the tab is, closes it |
+| `browser.js` | Asks the browser for the front tab (AppleScript), finds where the tab is on screen (Accessibility), closes it |
 | `sites.js` | The watched sites |
 | `preload.js` | The two functions the overlay page is allowed to call |
 | `renderer/cat.js` | The cat: SVG drawing, run cycle, and the pounce sequence |
@@ -45,13 +45,12 @@ Works with Chrome, Brave, Edge, Vivaldi, and Safari.
 
 ## Known rough edges
 
-- **Tab position is estimated.** AppleScript reports the window and the tab's index, not the tab's pixels, so `tabTarget()` in `browser.js` works it out from the usual tab strip layout. Pinned tabs, tab groups, and vertical tabs throw it off. The numbers to tune are at the top of that function.
+- **Tab position needs Accessibility.** With Accessibility allowed (Pounce asks on first launch, or use the menu item), `tabTarget()` in `browser.js` reads the active tab's real rectangle, so the cat lands on it on any screen, window size or full-screen layout. Without it, the position is estimated from the window frame, which is close for normal windows but off in full screen and with pinned or vertical tabs.
 - **Videos keep playing** until the tab closes.
 - **Arc and Firefox** are not supported yet.
 
 ## Ideas
 
-- Read the tab's real position through the Accessibility API
 - Escalating moods for repeat offences, and "five more minutes" bargaining
 - A settings window for custom sites and per-site limits
 - Let the cat wander the desktop when you are behaving
