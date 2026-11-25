@@ -1,8 +1,8 @@
-# Pounce
+# Scrollwise
 
-A menu bar app for macOS. A small fluffy cat watches your browser and closes the tab when you doom scroll too long.
+A menu bar app for macOS that stops doom scrolling with a cat. A small fluffy cat watches your browser, and when you've scrolled too long it runs along your tabs, pounces on the one you're on, and closes it.
 
-Spend too long on Instagram, YouTube Shorts, TikTok, X, Reddit, or Facebook and the cat leans in from the edge of the screen to warn you. Ignore it, and the cat runs along the tab bar, wiggles, hops onto your tab, and the tab closes.
+Spend too long on Instagram, YouTube Shorts, TikTok, X, Reddit, or Facebook and the cat leans in from the edge of the screen to warn you. Ignore it, and the cat runs along the tab row, wiggles, hops onto your tab, and the tab closes.
 
 Built with Electron and plain JavaScript.
 
@@ -16,7 +16,12 @@ npm install
 npm start
 ```
 
-A cat icon appears in the menu bar. The first time a supported browser is in front, macOS asks whether Pounce may control it. Say yes: that is how it reads the current tab and closes it. While you run it with `npm start`, the prompt names Electron or your terminal.
+A cat icon appears in the menu bar. macOS asks for two permissions. While you run it with `npm start`, the prompts name Electron or your terminal instead of Scrollwise.
+
+- **Accessibility**, asked on first launch. It lets the cat find exactly where your tab is on screen. If you skip it, the menu shows **Allow Accessibility for Scrollwise…** to turn it on later.
+- **Control of your browser** (Automation), asked the first time a supported browser is in front. This is how Scrollwise reads the current tab and closes it.
+
+To try it out:
 
 - **Preview the cat** in the menu plays the whole animation without closing anything.
 - **Scroll limit → 1 min** is the quickest way to test the real thing.
@@ -28,7 +33,8 @@ Works with Chrome, Brave, Edge, Vivaldi, and Safari.
 - **One shared budget.** All watched sites count toward a single timer (10 minutes by default). The time left shows next to the menu bar icon.
 - **Only the tab in front counts.** Five minutes away from every watched site starts a new session.
 - **Warning.** In the last 20% of the budget (at most the last 2 minutes), the cat leans in from the left edge with a countdown.
-- **Pounce.** At the limit the cat runs to your tab and lands on it; the tab closes on impact.
+- **Pounce.** At the limit the cat runs along the tab row to your tab and lands on it. The tab closes on impact.
+- **Finds the real tab.** The tab's position comes from the Accessibility API, so the cat lands on it on any screen size, window position, or full-screen layout. In full screen the cat stays low enough that it's never cut off at the top.
 - **Cooldown.** Watched sites stay closed for 5 minutes. Opening one gets it closed again.
 - **YouTube.** Only `/shorts` is watched.
 
@@ -45,7 +51,7 @@ Works with Chrome, Brave, Edge, Vivaldi, and Safari.
 
 ## Known rough edges
 
-- **Tab position needs Accessibility.** With Accessibility allowed (Pounce asks on first launch, or use the menu item), `tabTarget()` in `browser.js` reads the active tab's real rectangle, so the cat lands on it on any screen, window size or full-screen layout. Without it, the position is estimated from the window frame, which is close for normal windows but off in full screen and with pinned or vertical tabs.
+- **Without Accessibility** the tab position is estimated from the window frame. That's close for normal windows but off in full screen and with pinned or vertical tabs.
 - **Videos keep playing** until the tab closes.
 - **Arc and Firefox** are not supported yet.
 

@@ -10,7 +10,7 @@
  * 'done' when the cat has left the screen.
  */
 const Cat = (() => {
-  const bridge = window.pounce || null; // absent when this page is opened in a normal browser
+  const bridge = window.scrollwise || null; // absent when this page is opened in a normal browser
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const C = {
     fur: '#f6a94f',

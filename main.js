@@ -1,5 +1,5 @@
 /*
- * Pounce: a menu bar app. A transparent, click-through window covers the screen;
+ * Scrollwise: a menu bar app. A transparent, click-through window covers the screen;
  * the cat is drawn in it. Once a second we ask the browser which tab is in front,
  * count time on watched sites, and send the cat when the limit is reached.
  */
@@ -12,7 +12,7 @@ const browser = require('./browser');
 const RESET_GAP_MS = 5 * 60 * 1000; // this long away from watched sites starts a new session
 const COOLDOWN_MS = 5 * 60 * 1000; // watched sites stay closed this long after a pounce
 const LIMIT_CHOICES = [1, 5, 10, 15, 20, 30];
-const SMOKE = Boolean(process.env.POUNCE_SMOKE); // start, report, quit; never touches a browser
+const SMOKE = Boolean(process.env.SCROLLWISE_SMOKE); // start, report, quit; never touches a browser
 
 let overlay = null;
 let tray = null;
@@ -46,7 +46,7 @@ function saveState() {
 
 const limitSeconds = () => state.limitMinutes * 60;
 const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-const send = (channel, data) => overlay?.webContents.send('pounce:' + channel, data);
+const send = (channel, data) => overlay?.webContents.send('scrollwise:' + channel, data);
 
 /* ---- overlay window ---- */
 
@@ -86,7 +86,7 @@ function buildMenu() {
   const items = [];
   if (needsPermission) {
     items.push(
-      { label: `Pounce can't see ${needsPermission}.`, enabled: false },
+      { label: `Scrollwise can't see ${needsPermission}.`, enabled: false },
       { label: 'Allow it in System Settings → Privacy & Security → Automation', enabled: false },
       { type: 'separator' }
     );
@@ -95,7 +95,7 @@ function buildMenu() {
     items.push(
       { label: 'Let the cat find your tabs exactly:', enabled: false },
       {
-        label: 'Allow Accessibility for Pounce…',
+        label: 'Allow Accessibility for Scrollwise…',
         click: () => shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'),
       },
       { type: 'separator' }
@@ -118,7 +118,7 @@ function buildMenu() {
     { type: 'separator' },
     { label: 'Preview the cat', click: preview },
     { type: 'separator' },
-    { label: 'Quit Pounce', role: 'quit' }
+    { label: 'Quit Scrollwise', role: 'quit' }
   );
   tray.setContextMenu(Menu.buildFromTemplate(items));
 }
@@ -126,7 +126,7 @@ function buildMenu() {
 function createTray() {
   const icon = nativeImage.createFromPath(path.join(__dirname, 'icons', 'icon32.png')).resize({ width: 18, height: 18 });
   tray = new Tray(icon);
-  tray.setToolTip('Pounce');
+  tray.setToolTip('Scrollwise');
   buildMenu();
 }
 
@@ -229,10 +229,10 @@ function preview() {
   act(lastTab, "Time's up. Paws off.", { close: false });
 }
 
-ipcMain.on('pounce:impact', () => {
+ipcMain.on('scrollwise:impact', () => {
   if (acting?.close && acting.tab) browser.closeTab(acting.tab);
 });
-ipcMain.on('pounce:done', endAct);
+ipcMain.on('scrollwise:done', endAct);
 
 /* ---- startup ---- */
 
