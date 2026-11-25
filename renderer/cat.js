@@ -412,8 +412,12 @@ const Cat = (() => {
 
   /* ---- public ---- */
 
+  // Keep the whole cat on screen when the tabs sit right at the top (full screen).
+  const onScreen = (baseY) => Math.max(baseY, FEET + 2);
+
   function peek({ baseY, text }) {
     if (busy) return;
+    baseY = onScreen(baseY);
     if (!ui) build();
     place(baseY);
     if (!entering) {
@@ -451,6 +455,7 @@ const Cat = (() => {
   async function pounce({ tabX, baseY, text }) {
     if (busy) return;
     busy = true;
+    baseY = onScreen(baseY);
     if (!ui) build();
     place(baseY);
     await entering;

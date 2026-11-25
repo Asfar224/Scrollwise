@@ -157,27 +157,27 @@ async function tabRect(tab) {
 
 /**
  * Where the cat should land: x is the middle of the tab, y is the line its feet stand
- * on, which is the top edge of the tab so it perches on the tab header. Screen points.
+ * on, just above the tab's bottom edge so it runs along the tab row. Screen points.
  * Uses the real tab position when Accessibility is allowed, otherwise an estimate
  * from the window frame and each browser's standard tab strip layout.
  */
 async function tabTarget(tab) {
   const rect = await tabRect(tab);
-  if (rect) return { x: rect.x + rect.w / 2, y: rect.y + 3 };
+  if (rect) return { x: rect.x + rect.w / 2, y: rect.y + rect.h - 4 }; // feet just inside the tab's bottom edge
 
   const { x, y, width } = tab.bounds;
   if (tab.kind === 'safari') {
     // Separate tab bar under the toolbar; with one tab there is no bar, so stand on the toolbar.
-    if (tab.count <= 1) return { x: x + width / 2, y: y + 6 };
+    if (tab.count <= 1) return { x: x + width / 2, y: y + 48 };
     const tabWidth = width / tab.count;
-    return { x: x + (tab.index - 0.5) * tabWidth, y: y + 54 };
+    return { x: x + (tab.index - 0.5) * tabWidth, y: y + 82 };
   }
   // Chromium browsers: tabs start right of the window buttons, at the top of the window.
   const LEFT = 78;
   const RIGHT = 90; // new-tab and tab search buttons
   const MAX_TAB = 256;
   const tabWidth = Math.min(MAX_TAB, (width - LEFT - RIGHT) / tab.count);
-  return { x: x + LEFT + (tab.index - 0.5) * tabWidth, y: y + 8 };
+  return { x: x + LEFT + (tab.index - 0.5) * tabWidth, y: y + 38 };
 }
 
 // Closes the tab, but only if it is still the one in front.
