@@ -1,0 +1,13 @@
+{
+  "name": "pounce",
+  "version": "0.1.0",
+  "description": "A cat that lives on your Mac and closes the tab when you doom scroll too long.",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^41.7.1"
+  }
+}
