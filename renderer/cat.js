@@ -277,8 +277,10 @@ const Cat = (() => {
     catX = OFFSCREEN;
   }
 
+  let roomAbove = Infinity; // px between the top of the cat and the top of the screen
   const place = (baseY) => {
     ui.cat.style.top = baseY - FEET + 'px';
+    roomAbove = baseY - FEET;
   };
 
   /* ---- gaits ---- */
@@ -304,14 +306,17 @@ const Cat = (() => {
 
     if (gait === GALLOP) {
       // The whole body bounds: gather over the back feet, then stretch out through the air.
+      // Near the top of the screen the bound gets lower and flatter so the ears stay visible.
+      const bound = clamp(roomAbove - 6, 0, 9);
+      const tilt = roomAbove < 20 ? 2 : 5;
       cycle.push(
         loop(
           ui.lean,
           [
-            { transform: 'translateY(0px) rotate(5deg) scale(1.05, .93)', offset: 0, easing: 'ease-out' },
-            { transform: 'translateY(-9px) rotate(-5deg) scale(1.1, .93)', offset: 0.45, easing: 'ease-in' },
-            { transform: 'translateY(-3px) rotate(2deg) scale(.97, 1.04)', offset: 0.8 },
-            { transform: 'translateY(0px) rotate(5deg) scale(1.05, .93)', offset: 1 },
+            { transform: `translateY(0px) rotate(${tilt}deg) scale(1.05, .93)`, offset: 0, easing: 'ease-out' },
+            { transform: `translateY(${-bound}px) rotate(${-tilt}deg) scale(1.1, .93)`, offset: 0.45, easing: 'ease-in' },
+            { transform: `translateY(${-Math.min(3, bound)}px) rotate(2deg) scale(.97, 1.04)`, offset: 0.8 },
+            { transform: `translateY(0px) rotate(${tilt}deg) scale(1.05, .93)`, offset: 1 },
           ],
           { duration: cycleMs }
         )
@@ -500,6 +505,14 @@ const Cat = (() => {
     if (busy) return;
     busy = true;
     baseY = onScreen(baseY);
+    // Space between the top of the cat and the top of the screen. In full screen the
+    // tabs sit right under it, so the leap and hops flatten out instead of going off screen.
+    const room = baseY - FEET;
+    const tight = room < 30; // no space for a high arc: lunge forward low and long instead
+    const LEAP = clamp(room - 10, 4, 46); // the take-off stretch adds ~8px of its own
+    const HOP_UP = clamp(room - 2, 2, 9);
+    // The ! and the heart go above the head, or beside it when that would be off screen.
+    const nearHead = (x, y, rise) => (y - rise < 14 ? [x + 30, 14 + rise] : [x, y]);
     if (!ui) build();
     place(baseY);
     await entering;
@@ -518,7 +531,7 @@ const Cat = (() => {
     pose(legs.farFront, 'rotate(-24deg)', 90);
     pose(legs.nearBack, 'rotate(-22deg)', 90);
     pose(legs.farBack, 'rotate(-16deg)', 90);
-    pose(ui.lean, 'rotate(-10deg) scale(.96, 1.04)', 110);
+    pose(ui.lean, tight ? 'rotate(-5deg) scale(.98, 1.01)' : 'rotate(-10deg) scale(.96, 1.04)', 110);
     pose(ui.tailWrap, 'rotate(24deg)', 200, SPRING); // tail whips forward
     dust(catX + PAWS_X, baseY - 3, { count: 5, from: -Math.PI * 0.9, to: -Math.PI * 0.6, reach: 20 });
     const slideFrom = catX;
@@ -536,8 +549,7 @@ const Cat = (() => {
     pose(ui.earR, 'rotate(6deg) scale(1, 1.16)', 160, SPRING);
     fx(
       'alert',
-      stopX + HEAD_X + 8,
-      baseY - H - 2,
+      ...nearHead(stopX + HEAD_X + 8, baseY - H - 2, 6),
       [
         { opacity: 0, transform: 'translateY(8px) scale(.2)', offset: 0, easing: SPRING },
         { opacity: 1, transform: 'translateY(0) scale(1)', offset: 0.3 },
@@ -593,8 +605,20 @@ const Cat = (() => {
       ui.jump,
       [
         { transform: crouch, offset: 0, easing: 'ease-out' },
-        { transform: 'translateY(-14px) rotate(-16deg) scale(.9, 1.16)', offset: 0.2, easing: 'ease-out' },
-        { transform: 'translateY(-46px) rotate(-4deg) scale(.95, 1.08)', offset: 0.55, easing: 'ease-in' },
+        {
+          transform: tight
+            ? 'translateY(-2px) rotate(-5deg) scale(1.08, .96)'
+            : `translateY(${-Math.round(LEAP * 0.3)}px) rotate(-16deg) scale(.9, 1.16)`,
+          offset: 0.2,
+          easing: 'ease-out',
+        },
+        {
+          transform: tight
+            ? `translateY(${-LEAP}px) rotate(-1deg) scale(1.12, .94)`
+            : `translateY(${-LEAP}px) rotate(-4deg) scale(.95, 1.08)`,
+          offset: 0.55,
+          easing: 'ease-in',
+        },
         { transform: 'translateY(0px) rotate(14deg) scale(.98, 1.04)', offset: 1 },
       ],
       { duration: 360 }
@@ -623,11 +647,10 @@ const Cat = (() => {
     ui.eyesHappy.style.opacity = 1;
     pose(ui.earL, 'none', 200, SPRING);
     pose(ui.earR, 'none', 200, SPRING);
-    pose(ui.head, 'rotate(-7deg)', 220, SPRING);
+    pose(ui.head, tight ? 'rotate(-2deg)' : 'rotate(-7deg)', 220, SPRING);
     fx(
       'heart',
-      landX + HEAD_X + 12,
-      baseY - H + 4,
+      ...nearHead(landX + HEAD_X + 12, baseY - H + 4, 26),
       [
         { opacity: 0, transform: 'translateY(6px) scale(.3)', offset: 0, easing: SPRING },
         { opacity: 1, transform: 'translateY(-4px) scale(1)', offset: 0.3 },
@@ -638,7 +661,7 @@ const Cat = (() => {
     );
     const hopUp = [
       { transform: 'none', offset: 0, easing: 'ease-out' },
-      { transform: 'translateY(-9px) scale(.96, 1.06)', offset: 0.45, easing: 'ease-in' },
+      { transform: tight ? `translateY(${-HOP_UP}px) scale(1.02, .99)` : `translateY(${-HOP_UP}px) scale(.96, 1.06)`, offset: 0.45, easing: 'ease-in' },
       { transform: 'translateY(0px) scale(1.06, .93)', offset: 0.85 },
       { transform: 'none', offset: 1 },
     ];
