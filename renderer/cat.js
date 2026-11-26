@@ -13,7 +13,9 @@ const Cat = (() => {
   const bridge = window.scrollwise || null; // absent when this page is opened in a normal browser
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const C = {
-    fur: '#f6a94f',
+    fur: 'url(#sw-fur)', // soft light-to-dark shading, see defs in drawCat()
+    furTop: '#ffbd69',
+    furBottom: '#ec9a40',
     far: '#e2903a', // legs on the far side of the body
     stripe: '#d97f2b',
     cream: '#fff0db',
@@ -140,28 +142,30 @@ const Cat = (() => {
     );
     const tailWrap = pivot(svg('g', {}, [tail]), 54, 116); // tail sways inside; this streams it back in a dash
 
-    const body = svg('g', {}, [
-      svg('ellipse', { cx: 100, cy: 120, rx: 54, ry: 34, fill: C.fur }),
-      blob(58, 116, 27, C.fur),
-      blob(140, 118, 29, C.fur),
-      blob(84, 149, 10, C.fur),
-      blob(100, 152, 10, C.fur),
-      blob(116, 150, 10, C.fur),
-      svg('path', { d: 'M74 89 q5 10 0 19 M91 86 q5 10 0 19 M108 87 q5 10 0 19', ...stroke(C.stripe, 5) }),
-    ]);
+    const body = pivot(
+      svg('g', {}, [
+        svg('ellipse', { cx: 100, cy: 120, rx: 54, ry: 34, fill: C.fur }),
+        blob(58, 116, 27, C.fur),
+        blob(140, 118, 29, C.fur),
+        blob(84, 149, 10, C.fur),
+        blob(100, 152, 10, C.fur),
+        blob(116, 150, 10, C.fur),
+        svg('ellipse', { cx: 104, cy: 145, rx: 26, ry: 9, fill: C.cream, opacity: 0.55 }), // soft belly
+        svg('path', { d: 'M74 89 q5 10 0 19 M91 86 q5 10 0 19 M108 87 q5 10 0 19', ...stroke(C.stripe, 5) }),
+      ]),
+      100,
+      152
+    );
 
     const earL = pivot(svg('g', {}, [tuft('142,64 147,26 168,48', C.fur), tuft('149,56 151,38 162,50', C.pink)]), 156, 62);
     const earR = pivot(svg('g', {}, [tuft('176,48 198,26 202,64', C.fur), tuft('182,50 194,38 195,56', C.pink)]), 190, 62);
-    const blink = pivot(
-      svg('g', {}, [
-        svg('ellipse', { cx: 158, cy: 84, rx: 7.5, ry: 9.5, fill: C.ink }),
-        svg('ellipse', { cx: 192, cy: 84, rx: 7.5, ry: 9.5, fill: C.ink }),
-        blob(160.5, 80.5, 3, '#fff'),
-        blob(194.5, 80.5, 3, '#fff'),
-      ]),
-      175,
-      84
-    );
+    // Big glossy eyes: a dark iris with a warm glow at the bottom and two catchlights.
+    const eye = (cx) => [
+      svg('ellipse', { cx, cy: 86, rx: 9.5, ry: 11.5, fill: 'url(#sw-eye)' }),
+      blob(cx + 3, 81, 3.8, '#fff'),
+      blob(cx - 3.5, 91, 1.7, '#fff'),
+    ];
+    const blink = pivot(svg('g', {}, [...eye(157), ...eye(193)]), 175, 86);
     const eyesOpen = svg('g', {}, [blink]);
     const eyesHappy = svg('path', { d: 'M150 87 q8 -10 16 0 M184 87 q8 -10 16 0', ...stroke(C.ink, 3.6) });
     const brows = svg('path', { d: 'M147 70 L166 77 M203 70 L184 77', ...stroke(C.ink, 4.2) });
@@ -170,22 +174,30 @@ const Cat = (() => {
 
     const head = pivot(
       svg('g', {}, [
-        earL,
-        earR,
-        svg('ellipse', { cx: 172, cy: 84, rx: 43, ry: 37, fill: C.fur }),
-        tuft('133,86 121,103 141,107', C.fur),
-        tuft('136,98 128,114 148,112', C.fur),
-        tuft('211,86 223,103 203,107', C.fur),
-        tuft('208,98 216,114 196,112', C.fur),
-        svg('path', { d: 'M172 50 v10 M161 52 l2 9 M183 52 l-2 9', ...stroke(C.stripe, 4.5) }),
-        svg('ellipse', { cx: 175, cy: 101, rx: 18, ry: 12, fill: C.cream }),
-        blob(147, 99, 7, C.pink),
-        blob(203, 99, 7, C.pink),
-        eyesOpen,
-        eyesHappy,
-        brows,
-        svg('polygon', { points: '171,93 180,93 175.5,98', fill: C.nose }),
-        svg('path', { d: 'M175.5 98 q-4 7 -10 2 M175.5 98 q4 7 10 2', ...stroke(C.ink, 2.6) }),
+        // Drawn 12% larger than the body wants: a big head reads as kitten-cute.
+        svg('g', { transform: 'translate(172 96) scale(1.12) translate(-172 -96)' }, [
+          earL,
+          earR,
+          svg('ellipse', { cx: 172, cy: 84, rx: 43, ry: 37, fill: C.fur }),
+          tuft('133,86 121,103 141,107', C.fur),
+          tuft('136,98 128,114 148,112', C.fur),
+          tuft('211,86 223,103 203,107', C.fur),
+          tuft('208,98 216,114 196,112', C.fur),
+          svg('path', { d: 'M172 50 v10 M161 52 l2 9 M183 52 l-2 9', ...stroke(C.stripe, 4.5) }),
+          svg('ellipse', { cx: 175, cy: 102, rx: 17, ry: 11, fill: C.cream }),
+          svg('ellipse', { cx: 145, cy: 101, rx: 10, ry: 6.5, fill: 'url(#sw-blush)' }),
+          svg('ellipse', { cx: 205, cy: 101, rx: 10, ry: 6.5, fill: 'url(#sw-blush)' }),
+          svg('path', {
+            d: 'M140 97 l-17 -4 M140 102 l-18 1 M210 97 l17 -4 M210 102 l18 1',
+            ...stroke(C.ink, 1.4),
+            opacity: 0.45,
+          }),
+          eyesOpen,
+          eyesHappy,
+          brows,
+          svg('path', { d: 'M171.5 95 h8 q-4 5.5 -4 5.5 q0 0 -4 -5.5 z', fill: C.nose, stroke: C.nose, 'stroke-width': 1.5, 'stroke-linejoin': 'round' }),
+          svg('path', { d: 'M175.5 100.5 q-3 5.5 -8 2 M175.5 100.5 q3 5.5 8 2', ...stroke(C.ink, 2.2) }),
+        ]),
       ]),
       150,
       112
@@ -206,7 +218,23 @@ const Cat = (() => {
       nearBack: leg(64, 138, C.fur),
       nearFront: leg(126, 140, C.fur),
     };
+    // Gradients use the whole drawing as their frame, so overlapping fluff circles shade as one.
+    const defs = svg('defs', {}, [
+      svg('linearGradient', { id: 'sw-fur', gradientUnits: 'userSpaceOnUse', x1: 0, y1: 30, x2: 0, y2: 190 }, [
+        svg('stop', { offset: 0, 'stop-color': C.furTop }),
+        svg('stop', { offset: 1, 'stop-color': C.furBottom }),
+      ]),
+      svg('radialGradient', { id: 'sw-blush' }, [
+        svg('stop', { offset: 0, 'stop-color': '#ff8fa0', 'stop-opacity': 0.75 }),
+        svg('stop', { offset: 1, 'stop-color': '#ff8fa0', 'stop-opacity': 0 }),
+      ]),
+      svg('radialGradient', { id: 'sw-eye', cx: 0.5, cy: 0.85, r: 0.7 }, [
+        svg('stop', { offset: 0, 'stop-color': '#6b4a2b' }),
+        svg('stop', { offset: 0.55, 'stop-color': C.ink }),
+      ]),
+    ]);
     const art = svg('svg', { viewBox: '0 0 240 200', 'aria-hidden': 'true' }, [
+      defs,
       tailWrap,
       legs.farBack,
       legs.farFront,
@@ -215,7 +243,7 @@ const Cat = (() => {
       legs.nearFront,
       front,
     ]);
-    return { art, legs, tail, tailWrap, head, earL, earR, blink, eyesOpen, eyesHappy, brows, bobbers: [tailWrap, body, front] };
+    return { art, legs, tail, tailWrap, body, head, earL, earR, blink, eyesOpen, eyesHappy, brows, bobbers: [tailWrap, body, front] };
   }
 
   function build() {
@@ -306,21 +334,36 @@ const Cat = (() => {
     }
   }
 
-  async function runTo(x, gait, pxPerMs) {
+  // How a run speeds up and slows down, so it never starts or stops dead.
+  const EASE = {
+    arrive: 'cubic-bezier(.3, .15, .35, 1)', // gets going, then settles gently into place
+    launch: 'cubic-bezier(.5, 0, .9, .85)', // builds speed and is still flying at the end (into a skid)
+    leave: 'cubic-bezier(.45, 0, .8, .7)', // pushes off and keeps going off screen
+  };
+
+  async function runTo(x, gait, pxPerMs, easing = EASE.arrive) {
     const distance = Math.abs(x - catX);
     if (distance < 2) return;
     // Long trips get faster rather than longer.
     const duration = clamp(distance / pxPerMs, 220, 2600);
     const speed = distance / duration;
-    // Cycle length follows ground speed so planted feet don't slide.
+    // Cycle length follows average ground speed so planted feet don't slide.
     const cycleMs = clamp(strideOf(gait) / gait.stance / speed, 170, 520);
     startRun(gait, cycleMs);
     const from = catX;
     catX = x;
-    await anim(ui.cat, [{ transform: `translateX(${from}px)` }, { transform: `translateX(${x}px)` }], {
-      duration,
-      easing: 'linear',
-    });
+    await anim(ui.cat, [{ transform: `translateX(${from}px)` }, { transform: `translateX(${x}px)` }], { duration, easing });
+  }
+
+  // Slow breathing while the cat stands still.
+  function breathe() {
+    idle.push(
+      loop(ui.body, [{ transform: 'scale(1, 1)' }, { transform: 'scale(1.015, 1.035)' }], {
+        duration: 1300,
+        direction: 'alternate',
+        easing: 'ease-in-out',
+      })
+    );
   }
 
   /* ---- little effects ---- */
@@ -424,6 +467,7 @@ const Cat = (() => {
       entering = runTo(PEEK_X, TROT, TROT_SPEED).then(() => {
         if (!ui || busy) return;
         stopLoops(cycle);
+        breathe();
         // Waiting: curious head tilts and the odd ear flick.
         idle.push(
           loop(ui.head, [{ transform: 'rotate(-5deg)' }, { transform: 'rotate(6deg)' }], {
@@ -465,7 +509,8 @@ const Cat = (() => {
     const stopX = landX - HOP;
 
     // 1. Dash along the tab strip.
-    await runTo(Math.max(catX, stopX - SKID), GALLOP, DASH_SPEED);
+    stopLoops(idle);
+    await runTo(Math.max(catX, stopX - SKID), GALLOP, DASH_SPEED, EASE.launch);
 
     // 2. Brake: legs braced, body rocked back, sliding the last stretch in a cloud of dust.
     stopLoops(cycle);
@@ -484,6 +529,7 @@ const Cat = (() => {
     });
     for (const part of [...Object.values(legs), ui.tailWrap]) pose(part, 'none', 220, SPRING);
     await pose(ui.lean, 'none', 260, SPRING);
+    breathe();
 
     // 3. Spot the tab.
     pose(ui.earL, 'rotate(-6deg) scale(1, 1.16)', 160, SPRING);
@@ -525,6 +571,7 @@ const Cat = (() => {
 
     // 5. Pounce: stretch out on the way up, tuck and tip forward on the way down.
     hush();
+    stopLoops(idle);
     pose(legs.nearFront, 'rotate(-62deg)', 110);
     pose(legs.farFront, 'rotate(-50deg)', 110);
     pose(legs.nearBack, 'rotate(54deg)', 110);
@@ -606,7 +653,7 @@ const Cat = (() => {
     anim(ui.jump, hopUp, { duration: 240 });
     await anim(ui.flip, [{ transform: 'scaleX(1)' }, { transform: 'scaleX(-1)' }], { duration: 200, easing: 'ease-in-out' });
     pose(ui.tailWrap, 'rotate(14deg)', 200);
-    await runTo(OFFSCREEN, TROT, TROT_SPEED * 1.7);
+    await runTo(OFFSCREEN, TROT, TROT_SPEED * 1.7, EASE.leave);
     hide();
     bridge?.send('done');
   }

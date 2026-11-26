@@ -20,6 +20,12 @@ body {
   left: 0;
   top: 0;
 }
+/* Own compositor layers: moving and squashing the cat never repaints the page. */
+.cat,
+.lean,
+.jump {
+  will-change: transform;
+}
 .flip,
 .lean,
 .jump {
