@@ -182,18 +182,26 @@ async function tabTarget(tab) {
 
 // Closes the tab, but only if it is still the one in front.
 async function closeTab(tab) {
-  if (!BROWSERS[tab.app] || !Number.isInteger(tab.id)) return;
+  if (!BROWSERS[tab.app] || !Number.isInteger(tab.id)) return false;
+  // Chrome reports tab ids as text, so compare as text: a number never equals it.
   const script =
     tab.kind === 'safari'
       ? `tell application "${tab.app}" to close current tab of front window`
       : `tell application "${tab.app}"
            set t to active tab of front window
-           if (id of t) is ${tab.id} then close t
+           if ((id of t) as text) is "${tab.id}" then
+             close t
+             return "closed"
+           end if
+           return "moved"
          end tell`;
   try {
-    await osascript(script);
-  } catch {
-    // The tab or window went away on its own.
+    const out = await osascript(script);
+    if (out === 'moved') console.log(`Scrollwise: left ${tab.app} alone, a different tab is in front now`);
+    return out !== 'moved';
+  } catch (error) {
+    console.error(`Scrollwise: couldn't close the ${tab.app} tab:`, (error.stderr || error.message).trim());
+    return false;
   }
 }
 
