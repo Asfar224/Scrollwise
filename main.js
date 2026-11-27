@@ -16,7 +16,8 @@ const SMOKE = Boolean(process.env.SCROLLWISE_SMOKE); // start, report, quit; nev
 
 let overlay = null;
 let tray = null;
-let state = { limitMinutes: 10, seconds: 0, lastActive: 0, blockedUntil: 0 };
+// skipped: names of sites the person unticked, so sites added later start out watched.
+let state = { limitMinutes: 10, seconds: 0, lastActive: 0, blockedUntil: 0, skipped: [] };
 let acting = null; // { tab, close } while the cat is mid-pounce
 let actTimer = null;
 let ticking = false;
@@ -45,6 +46,11 @@ function saveState() {
 }
 
 const limitSeconds = () => state.limitMinutes * 60;
+const isWatched = (site) => !state.skipped.includes(site.name);
+const watchedSite = (url) => {
+  const site = siteFor(url);
+  return site && isWatched(site) ? site : null;
+};
 const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const send = (channel, data) => overlay?.webContents.send('scrollwise:' + channel, data);
 
@@ -114,7 +120,20 @@ function buildMenu() {
         },
       })),
     },
-    { label: 'Watching: ' + SITES.map((site) => site.name).join(', '), enabled: false },
+    {
+      label: 'Watching',
+      submenu: SITES.map((site) => ({
+        label: site.name,
+        type: 'checkbox',
+        checked: isWatched(site),
+        click: (item) => {
+          state.skipped = item.checked
+            ? state.skipped.filter((name) => name !== site.name)
+            : [...state.skipped, site.name];
+          saveState();
+        },
+      })),
+    },
     { type: 'separator' },
     { label: 'Preview the cat', click: preview },
     { type: 'separator' },
@@ -160,7 +179,7 @@ async function tick() {
     lastTab = tab;
     if (acting) return; // a preview started while we were asking the browser
 
-    if (!tab || !siteFor(tab.url)) {
+    if (!tab || !watchedSite(tab.url)) {
       if (catOut) {
         send('hide');
         catOut = false;

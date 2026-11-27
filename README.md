@@ -25,6 +25,7 @@ To try it out:
 
 - **Preview the cat** in the menu plays the whole animation without closing anything.
 - **Scroll limit → 1 min** is the quickest way to test the real thing.
+- **Watching** lets you untick sites you don't want the cat to guard.
 
 Works with Chrome, Brave, Edge, Vivaldi, and Safari.
 
