@@ -25,7 +25,7 @@ To try it out:
 
 - **Preview the cat** in the menu plays the whole animation without closing anything.
 - **Scroll limit → 1 min** is the quickest way to test the real thing.
-- **Watching** lets you untick sites you don't want the cat to guard.
+- **Watching** lets you untick sites you don't want the cat to guard, or **Add a site…** of your own.
 
 Works with Chrome, Brave, Edge, Vivaldi, and Safari.
 
@@ -59,5 +59,5 @@ Works with Chrome, Brave, Edge, Vivaldi, and Safari.
 ## Ideas
 
 - Escalating moods for repeat offences, and "five more minutes" bargaining
-- A settings window for custom sites and per-site limits
+- Per-site limits
 - Let the cat wander the desktop when you are behaving

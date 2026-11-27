@@ -6,7 +6,7 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, shell, systemPreferences } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { SITES, siteFor } = require('./sites');
+const { SITES, siteFor, customSite, hostFrom } = require('./sites');
 const browser = require('./browser');
 
 const RESET_GAP_MS = 5 * 60 * 1000; // this long away from watched sites starts a new session
@@ -17,7 +17,9 @@ const SMOKE = Boolean(process.env.SCROLLWISE_SMOKE); // start, report, quit; nev
 let overlay = null;
 let tray = null;
 // skipped: names of sites the person unticked, so sites added later start out watched.
-let state = { limitMinutes: 10, seconds: 0, lastActive: 0, blockedUntil: 0, skipped: [] };
+// custom: hosts the person added themselves, e.g. "pinterest.com".
+let state = { limitMinutes: 10, seconds: 0, lastActive: 0, blockedUntil: 0, skipped: [], custom: [] };
+let addWindow = null;
 let acting = null; // { tab, close } while the cat is mid-pounce
 let actTimer = null;
 let ticking = false;
@@ -47,10 +49,63 @@ function saveState() {
 
 const limitSeconds = () => state.limitMinutes * 60;
 const isWatched = (site) => !state.skipped.includes(site.name);
+const customSites = () => state.custom.map(customSite);
 const watchedSite = (url) => {
-  const site = siteFor(url);
+  const site = siteFor(url, customSites());
   return site && isWatched(site) ? site : null;
 };
+
+/* ---- custom sites ---- */
+
+// Saves a typed-in site. Returns what's wrong with it, or null when it was added.
+function addSite(text) {
+  const host = hostFrom(text);
+  if (!host) return 'Try a website, like pinterest.com';
+  const existing = siteFor('https://' + host + '/', customSites());
+  if (existing && existing.custom) return `${host} is already on the list.`;
+  // Built-ins match whole hosts unless they only watch one path (YouTube Shorts).
+  if (existing && !existing.path) return `${existing.name} is already on the list.`;
+  state.custom = [...state.custom, host];
+  state.skipped = state.skipped.filter((name) => name !== host);
+  saveState();
+  buildMenu();
+  return null;
+}
+
+function removeSite(host) {
+  state.custom = state.custom.filter((h) => h !== host);
+  state.skipped = state.skipped.filter((name) => name !== host);
+  saveState();
+  buildMenu();
+}
+
+function openAddWindow() {
+  if (addWindow) {
+    addWindow.focus();
+    return;
+  }
+  addWindow = new BrowserWindow({
+    width: 360,
+    height: 160,
+    useContentSize: true, // size the page, not the window with its title bar
+    title: 'Add a site',
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    show: false,
+    webPreferences: { preload: path.join(__dirname, 'preload.js') },
+  });
+  addWindow.loadFile(path.join(__dirname, 'renderer', 'add-site.html'));
+  addWindow.once('ready-to-show', () => {
+    app.focus({ steal: true }); // menu bar apps aren't in front, so the window would open behind
+    addWindow.show();
+  });
+  addWindow.on('closed', () => (addWindow = null));
+}
+
+ipcMain.handle('scrollwise:add-site', (_event, text) => addSite(text));
 const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const send = (channel, data) => overlay?.webContents.send('scrollwise:' + channel, data);
 
@@ -88,6 +143,32 @@ function toOverlay(point) {
 
 /* ---- menu bar ---- */
 
+// One tick box per site, the person's own sites below the built-in ones, then add/remove.
+function watchingMenu() {
+  const toggle = (site) => ({
+    label: site.name,
+    type: 'checkbox',
+    checked: isWatched(site),
+    click: (item) => {
+      state.skipped = item.checked
+        ? state.skipped.filter((name) => name !== site.name)
+        : [...state.skipped, site.name];
+      saveState();
+    },
+  });
+  const items = SITES.map(toggle);
+  const custom = customSites();
+  if (custom.length) items.push({ type: 'separator' }, ...custom.map(toggle));
+  items.push({ type: 'separator' }, { label: 'Add a site…', click: openAddWindow });
+  if (custom.length) {
+    items.push({
+      label: 'Remove a site',
+      submenu: custom.map((site) => ({ label: site.name, click: () => removeSite(site.name) })),
+    });
+  }
+  return items;
+}
+
 function buildMenu() {
   const items = [];
   if (needsPermission) {
@@ -120,20 +201,7 @@ function buildMenu() {
         },
       })),
     },
-    {
-      label: 'Watching',
-      submenu: SITES.map((site) => ({
-        label: site.name,
-        type: 'checkbox',
-        checked: isWatched(site),
-        click: (item) => {
-          state.skipped = item.checked
-            ? state.skipped.filter((name) => name !== site.name)
-            : [...state.skipped, site.name];
-          saveState();
-        },
-      })),
-    },
+    { label: 'Watching', submenu: watchingMenu() },
     { type: 'separator' },
     { label: 'Preview the cat', click: preview },
     { type: 'separator' },

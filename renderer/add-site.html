@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'" />
+    <title>Add a site</title>
+    <link rel="stylesheet" href="add-site.css" />
+  </head>
+  <body>
+    <form id="form">
+      <label for="site">Site for the cat to watch</label>
+      <input id="site" type="text" placeholder="e.g. pinterest.com" autocomplete="off" spellcheck="false" autofocus />
+      <p id="error" role="alert"></p>
+      <div class="buttons">
+        <button type="button" id="cancel">Cancel</button>
+        <button type="submit" id="add">Add</button>
+      </div>
+    </form>
+    <script src="add-site.js"></script>
+  </body>
+</html>
