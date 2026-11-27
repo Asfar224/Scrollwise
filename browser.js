@@ -12,7 +12,13 @@ const BROWSERS = {
   'Microsoft Edge': 'chrome',
   Chromium: 'chrome',
   Vivaldi: 'chrome',
+  Arc: 'arc',
   Safari: 'safari',
+  Firefox: 'firefox',
+  'Firefox Developer Edition': 'firefox',
+  'Firefox Nightly': 'firefox',
+  LibreWolf: 'firefox',
+  Zen: 'firefox',
 };
 
 function run(file, args) {
@@ -56,7 +62,77 @@ const READ = {
       set b to bounds of w
       return "" & (index of t) & sep & (index of t) & sep & (count of tabs of w) & sep & (item 1 of b) & sep & (item 2 of b) & sep & (item 3 of b) & sep & (item 4 of b) & sep & (URL of t)
     end tell`,
+  // Arc speaks Chrome's dialect but has no tab index, and tab ids are text.
+  arc: (app) => `
+    set sep to (ASCII character 9)
+    tell application "${app}"
+      if (count of windows) is 0 then return ""
+      set w to front window
+      set t to active tab of w
+      set b to {0, 0, 0, 0}
+      try
+        set b to bounds of w
+      end try
+      return "" & (id of t) & sep & 1 & sep & (count of tabs of w) & sep & (item 1 of b) & sep & (item 2 of b) & sep & (item 3 of b) & sep & (item 4 of b) & sep & (URL of t)
+    end tell`,
 };
+
+/*
+ * Firefox has no AppleScript for tabs, so read the address bar through the
+ * Accessibility API instead. Prints JSON: { url, x, y, w, h } or {} if not found.
+ */
+const FIREFOX_READ = `
+function run(argv) {
+  const se = Application('System Events');
+  let proc = se.processes.byName(argv[0]);
+  if (!proc.exists()) proc = se.processes.whose({ frontmost: true })[0];
+  // Firefox only builds its accessibility tree once something asks for it. Leave it on:
+  // switching it off and on every second makes the window stutter.
+  try { const eui = proc.attributes.byName('AXEnhancedUserInterface'); if (!eui.value()) eui.value = true; } catch (e) {}
+  function urlIn(el, depth, inToolbar) {
+    if (depth > 10) return null;
+    let kids;
+    try { kids = el.uiElements(); } catch (e) { return null; }
+    for (const k of kids) {
+      let role = '';
+      try { role = k.role(); } catch (e) { continue; }
+      if (role === 'AXWebArea' || role === 'AXScrollArea') continue; // page content
+      if (inToolbar && (role === 'AXTextField' || role === 'AXComboBox')) {
+        let v = '';
+        try { v = String(k.value() || ''); } catch (e) {}
+        if (/^[^\\s]+\\.[^\\s]+/.test(v)) return v; // looks like an address, not a half-typed search
+      }
+      const found = urlIn(k, depth + 1, inToolbar || role === 'AXToolbar');
+      if (found) return found;
+    }
+    return null;
+  }
+  const windows = proc.windows();
+  for (const w of windows) {
+    const url = urlIn(w, 0, false);
+    if (url) {
+      const [x, y] = w.position();
+      const [width, height] = w.size();
+      return JSON.stringify({ url, x, y, w: width, h: height });
+    }
+  }
+  return '{}';
+}`;
+
+// The address bar often hides "https://", so put a scheme back before matching.
+const withScheme = (url) => (/^[a-z][a-z0-9+.-]*:/i.test(url) ? url : 'https://' + url);
+
+async function readFirefox(app) {
+  // Without the permission macOS doesn't fail, it just shows no windows, so check first.
+  accessibilityDenied = !systemPreferences.isTrustedAccessibilityClient(false);
+  if (accessibilityDenied) return null;
+  const { url, x, y, w, h } = JSON.parse(await run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', FIREFOX_READ, app]));
+  if (!url) return null;
+  // No tab ids in Firefox; closing checks the address instead.
+  return { app, kind: 'firefox', id: '', index: 1, count: 1, bounds: { x, y, width: w, height: h }, url: withScheme(url) };
+}
+
+const isPermissionError = (error) => /-1743|not authori[sz]ed/i.test(error.stderr || '');
 
 /**
  * The tab the person is looking at, or null when no supported browser is in front.
@@ -67,11 +143,20 @@ async function getFrontTab() {
   const kind = BROWSERS[app];
   if (!kind) return null;
 
+  if (kind === 'firefox') {
+    try {
+      return await readFirefox(app);
+    } catch (error) {
+      if (isPermissionError(error)) throw Object.assign(error, { permission: true, app: 'System Events' });
+      return null;
+    }
+  }
+
   let out;
   try {
     out = await osascript(READ[kind](app));
   } catch (error) {
-    if (/-1743|not authori[sz]ed/i.test(error.stderr || '')) throw Object.assign(error, { permission: true, app });
+    if (isPermissionError(error)) throw Object.assign(error, { permission: true, app });
     return null; // e.g. the front window has no tabs
   }
   if (!out) return null;
@@ -80,7 +165,7 @@ async function getFrontTab() {
   return {
     app,
     kind,
-    id: Number(id),
+    id, // Chrome and Arc report ids as text; Safari's is the tab index
     index: Number(index), // 1-based
     count: Number(count),
     bounds: { x: Number(left), y: Number(top), width: Number(right) - Number(left), height: Number(bottom) - Number(top) },
@@ -96,7 +181,9 @@ async function getFrontTab() {
  */
 const FIND_TABS = `
 function run(argv) {
-  const proc = Application('System Events').processes.byName(argv[0]);
+  const se = Application('System Events');
+  let proc = se.processes.byName(argv[0]);
+  if (!proc.exists()) proc = se.processes.whose({ frontmost: true })[0]; // e.g. Firefox's process is "firefox"
   // Chrome only builds its accessibility tree when asked, so switch it on for the lookup.
   const eui = proc.attributes.byName('AXEnhancedUserInterface');
   let wasOn = true;
@@ -166,37 +253,54 @@ async function tabTarget(tab) {
   if (rect) return { x: rect.x + rect.w / 2, y: rect.y + rect.h - 4 }; // feet just inside the tab's bottom edge
 
   const { x, y, width } = tab.bounds;
+  if (!width) return null; // the browser wouldn't say where its window is
+  if (tab.kind === 'arc') {
+    // Tabs live in the left sidebar; stand on the top of it, by the address field.
+    return { x: x + 130, y: y + 48 };
+  }
   if (tab.kind === 'safari') {
     // Separate tab bar under the toolbar; with one tab there is no bar, so stand on the toolbar.
     if (tab.count <= 1) return { x: x + width / 2, y: y + 48 };
     const tabWidth = width / tab.count;
     return { x: x + (tab.index - 0.5) * tabWidth, y: y + 82 };
   }
-  // Chromium browsers: tabs start right of the window buttons, at the top of the window.
-  const LEFT = 78;
-  const RIGHT = 90; // new-tab and tab search buttons
-  const MAX_TAB = 256;
+  // Chromium browsers and Firefox: tabs start right of the window buttons, at the top of the window.
+  const firefox = tab.kind === 'firefox';
+  const LEFT = firefox ? 110 : 78; // Firefox has a Firefox View button first
+  const RIGHT = 90; // new-tab and tab list buttons
+  const MAX_TAB = firefox ? 225 : 256;
   const tabWidth = Math.min(MAX_TAB, (width - LEFT - RIGHT) / tab.count);
   return { x: x + LEFT + (tab.index - 0.5) * tabWidth, y: y + 38 };
 }
 
+// Firefox can't close a tab by script, so press ⌘W, but only if it's still in front on the same page.
+async function closeFirefoxTab(tab) {
+  if ((await frontApp()) !== tab.app) return 'moved';
+  const now = await readFirefox(tab.app);
+  if (!now || now.url !== tab.url) return 'moved';
+  await osascript('tell application "System Events" to keystroke "w" using command down');
+  return 'closed';
+}
+
 // Closes the tab, but only if it is still the one in front.
 async function closeTab(tab) {
-  if (!BROWSERS[tab.app] || !Number.isInteger(tab.id)) return false;
-  // Chrome reports tab ids as text, so compare as text: a number never equals it.
+  if (!BROWSERS[tab.app]) return false;
+  const id = String(tab.id);
+  if (!/^[\w-]*$/.test(id)) return false; // ids go into the script, so only plain ones
+  // Compare ids as text: Chrome and Arc report them as text, and a number never equals it.
   const script =
     tab.kind === 'safari'
       ? `tell application "${tab.app}" to close current tab of front window`
       : `tell application "${tab.app}"
            set t to active tab of front window
-           if ((id of t) as text) is "${tab.id}" then
+           if ((id of t) as text) is "${id}" then
              close t
              return "closed"
            end if
            return "moved"
          end tell`;
   try {
-    const out = await osascript(script);
+    const out = tab.kind === 'firefox' ? await closeFirefoxTab(tab) : await osascript(script);
     if (out === 'moved') console.log(`Scrollwise: left ${tab.app} alone, a different tab is in front now`);
     return out !== 'moved';
   } catch (error) {

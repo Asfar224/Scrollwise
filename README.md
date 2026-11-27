@@ -27,7 +27,7 @@ To try it out:
 - **Scroll limit → 1 min** is the quickest way to test the real thing.
 - **Watching** lets you untick sites you don't want the cat to guard, or **Add a site…** of your own.
 
-Works with Chrome, Brave, Edge, Vivaldi, and Safari.
+Works with Chrome, Brave, Edge, Vivaldi, Arc, Safari, and Firefox. Firefox needs Accessibility to read which page is open, since it can't be scripted like the others.
 
 ## How it works
 
@@ -54,7 +54,8 @@ Works with Chrome, Brave, Edge, Vivaldi, and Safari.
 
 - **Without Accessibility** the tab position is estimated from the window frame. That's close for normal windows but off in full screen and with pinned or vertical tabs.
 - **Videos keep playing** until the tab closes.
-- **Arc and Firefox** are not supported yet.
+- **Firefox** tabs close with ⌘W, after checking the same page is still in front.
+- **Arc** keeps tabs in a sidebar, so the cat lands at the top of it rather than on the exact tab.
 
 ## Ideas
 

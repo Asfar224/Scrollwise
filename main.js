@@ -245,6 +245,7 @@ async function tick() {
       }
     }
     lastTab = tab;
+    syncAccessibility(); // Firefox needs it just to read the page
     if (acting) return; // a preview started while we were asking the browser
 
     if (!tab || !watchedSite(tab.url)) {
@@ -262,8 +263,11 @@ async function tick() {
       return;
     }
 
+    // Count the time that really passed: reading Firefox takes over a second.
+    // Capped, so a sleeping Mac or a long gap doesn't count as scrolling.
     const stale = now - state.lastActive > RESET_GAP_MS;
-    state.seconds = (stale ? 0 : state.seconds) + 1;
+    const passed = stale ? 1 : Math.min(Math.max((now - state.lastActive) / 1000, 0), 5);
+    state.seconds = (stale ? 0 : state.seconds) + passed;
     state.lastActive = now;
     saveState();
 
@@ -276,7 +280,7 @@ async function tick() {
       saveState();
       act(tab, "Time's up. Paws off.", { close: true });
     } else if (state.seconds >= warnAt) {
-      const left = limit - state.seconds;
+      const left = Math.ceil(limit - state.seconds); // whole seconds for the bubble
       if (!catOut) peekY = toOverlay(await browser.tabTarget(tab)).y; // look the tab up once, not every second
       const local = { y: peekY };
       send('peek', { baseY: local.y, text: `psst… ${left >= 60 ? Math.ceil(left / 60) + ' min' : left + 's'} left` });
@@ -291,15 +295,19 @@ async function tick() {
   }
 }
 
+// Show or hide the "Allow Accessibility" menu item when that permission changes.
+function syncAccessibility() {
+  if (browser.needsAccessibility() === needsAccessibility) return;
+  needsAccessibility = browser.needsAccessibility();
+  buildMenu();
+}
+
 // Send the cat to the tab. With close: true the tab is closed when it lands.
 async function act(tab, text, { close }) {
   acting = { tab, close };
   catOut = false;
   const target = tab ? await browser.tabTarget(tab) : null;
-  if (browser.needsAccessibility() !== needsAccessibility) {
-    needsAccessibility = browser.needsAccessibility();
-    buildMenu();
-  }
+  syncAccessibility();
   const display = screen.getPrimaryDisplay().bounds;
   const local = toOverlay(target ?? { x: display.x + 420, y: display.y + 90 });
   send('pounce', { tabX: local.x, baseY: local.y, text });
